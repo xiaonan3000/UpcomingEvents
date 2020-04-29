@@ -85,23 +85,21 @@ class ViewController: UIViewController {
             if let eventList = eventDataDictionary[dateKey],  eventList.count > 1 {
                 for i in 0...eventList.count-2{
                     let first = eventList[i]
-                    for j in i+1...eventList.count-1{
-                        let next  = eventList[j]
-                        //Events are already sorted by start time
-                        if (first.end > next.start)
-                        {
-                            if let range = conflictsDict[dateKey]{
-                                if range.start > next.start{
-                                    conflictsDict[dateKey]!.start = next.start
-                                }
-                                if range.end < first.end{
-                                    conflictsDict[dateKey]!.start = first.end
-                                }
-                            }else{
-                                conflictsDict[dateKey] = ConflictRange.init(start: next.start, end: first.end)
+                    let next  = eventList[i+1]
+                    //Events are already sorted by start time
+                    if (first.end > next.start)
+                    {
+                        if let range = conflictsDict[dateKey]{
+                            if range.start > next.start{
+                                conflictsDict[dateKey]!.start = next.start
                             }
+                            if range.end < first.end{
+                                conflictsDict[dateKey]!.start = first.end
+                            }
+                        }else{
+                            conflictsDict[dateKey] = ConflictRange.init(start: next.start, end: first.end)
                         }
-                    }
+                    }   
                 }
             }
         }
