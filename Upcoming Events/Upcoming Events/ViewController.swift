@@ -8,7 +8,7 @@
 
 import UIKit
 
-struct EventItem: Codable{
+struct EventItem: Codable, Hashable{
     var title: String
     var start: Date
     var end: Date
@@ -21,8 +21,9 @@ struct ConflictRange{
 
 class ViewController: UIViewController {
 
-    var eventDataArray = [EventItem]()
-    var conflictsDict = [Date: ConflictRange]()
+    var eventDataDictionary = [Date : [EventItem]]()
+    var sortedDateKeys =  [Date]()
+    var conflictingEventsSet : Set<EventItem>  = []
     
     let shortDateFormatter : DateFormatter = {
         let formatter = DateFormatter()
@@ -42,18 +43,17 @@ class ViewController: UIViewController {
         return formatter
     }()
    
-    var eventDataDictionary = [Date : [EventItem]]()
-    var sortedDateKeys =  [Date]()
+ 
     
+    @IBOutlet weak var noEventLabel: UILabel!
     @IBOutlet weak var eventTableView: UITableView!
     
     override func viewDidLoad() {
         super.viewDidLoad()        
-        self.loadJsonData()
+        self.loadData()
     }
 
-    
-    func loadJsonData(){
+    func writeJsonDataToEvents() -> [EventItem]?{
         if let path = Bundle.main.url(forResource: "mock", withExtension: "json"){
             do {
                 let data = try Data(contentsOf: path)
@@ -61,54 +61,68 @@ class ViewController: UIViewController {
                 decoder.dateDecodingStrategy = .formatted(longDateFormatter)
                 //Write json data to EventItem
                 let events = try decoder.decode([EventItem].self, from: data)
+                return events
                 
-                self.eventDataDictionary = events.sorted(by: {$0.start < $1.start }).reduce(into: [Date: [EventItem]]()) { result, event in
-                    // Sort events under the same date group by their start dates
-                    let components = Calendar.current.dateComponents([.day, .year, .month], from: event.start)
-                    let date = Calendar.current.date(from: components)
-                    result[date!, default: []].append(event)
-                }
-           
             } catch {
                 print("JSON decoding Error:\(error)")
+                return nil
             }
         }
-        //Sort Date Key
-        sortedDateKeys = eventDataDictionary.keys.sorted(by: {$0 > $1})
-        self.checkConflictEvents()
-        self.eventTableView.reloadData()
+        return nil
     }
     
-    //Finding Overlapping time frames
-    func checkConflictEvents(){
-        for dateKey in sortedDateKeys{
-            if let eventList = eventDataDictionary[dateKey],  eventList.count > 1 {
-                for i in 0...eventList.count-2{
-                    let first = eventList[i]
-                    let next  = eventList[i+1]
-                    //Events are already sorted by start time
-                    if (first.end > next.start)
-                    {
-                        if let range = conflictsDict[dateKey]{
-                            if range.start > next.start{
-                                conflictsDict[dateKey]!.start = next.start
-                            }
-                            if range.end < first.end{
-                                conflictsDict[dateKey]!.start = first.end
-                            }
-                        }else{
-                            conflictsDict[dateKey] = ConflictRange.init(start: next.start, end: first.end)
-                        }
-                    }   
-                }
+    func loadData(){
+        if let events = self.writeJsonDataToEvents(){
+            self.eventTableView.isHidden = false
+            self.noEventLabel.isHidden = true
+            
+            let sortedEvents = events.sorted(by: {$0.start < $1.start })
+            //Get conflicting events
+            self.conflictingEventsSet = getConflictingEvents(sortedEvents: sortedEvents)
+            //Group events by Start Date
+            self.eventDataDictionary = sortedEvents.reduce(into: [Date: [EventItem]]()) { result, event in
+                // Sort events under the same date group by their start dates
+                let components = Calendar.current.dateComponents([.day, .year, .month], from: event.start)
+                let date = Calendar.current.date(from: components)
+                result[date!, default: []].append(event)
             }
+            //Sort Keys by Date Componenet
+            sortedDateKeys = eventDataDictionary.keys.sorted(by: {$0 > $1})
+            self.eventTableView.reloadData()
+        }
+        else{
+            //No events
+            self.eventTableView.isHidden = true
+            self.noEventLabel.isHidden = false
         }
     }
     
+    
+     //Input events need to be sorted by start time
+    func getConflictingEvents(sortedEvents: [EventItem]) -> Set<EventItem>{
+        var conflictEvents : Set<EventItem> = []
+        var intervalTaken: DateInterval =  DateInterval(start:sortedEvents[0].start, end: sortedEvents[0].end)
+        for i in 1...sortedEvents.count-1{
+            let event = sortedEvents[i]
+           
+            if (intervalTaken.end > event.start)
+            {
+                //Overlapping
+                intervalTaken = DateInterval(start: intervalTaken.start, end: max(event.end, intervalTaken.end))
+                let previousEvent = sortedEvents[i-1]
+                conflictEvents.insert(previousEvent)
+                conflictEvents.insert(event)
+            }else{
+                //start a new interval
+                intervalTaken = DateInterval(start: event.start, end: event.end)
+            }
+        }
+       
+        return conflictEvents
+    }
     
     @IBAction func reloadJsonData(_ sender: Any) {
-        self.loadJsonData()
-        
+        self.loadData()
     }
 
 }
@@ -161,14 +175,11 @@ extension ViewController: UITableViewDataSource{
             //Cell details label shows start and end time
             let startDate = eventForCell.start
             let endDate = eventForCell.end
-           
             cell.detailTextLabel?.text = "\(timeFormatter.string(from: startDate)) - \(timeFormatter.string(from: endDate))"
-        
-            //Conflicting event
-            if let conflictInterval = conflictsDict[key]{
-                let isOverlapping = (eventForCell.start...eventForCell.end).overlaps(conflictInterval.start...conflictInterval.end)
-                cell.detailTextLabel?.textColor = isOverlapping ? UIColor.red  : UIColor.darkGray
-            }
+           
+            //Display overlapping event in red text
+            let isOverlapping = self.conflictingEventsSet.contains(eventForCell)
+            cell.detailTextLabel?.textColor = isOverlapping ? UIColor.red  : UIColor.darkGray
         }
         return cell
     }
