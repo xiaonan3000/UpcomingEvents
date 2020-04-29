@@ -89,9 +89,7 @@ class ViewController: UIViewController {
                         for j in i+1...eventList.count-1{
                             let next  = eventList[j]
                             //Events are already sorted by start time
-                            if (first.end >= next.end)     // 7:45 - 8:00 | 7:30 - 8:00
-                                || (first.start == next.start)  // 7:00 - 7:30 | 7:00 - 8:00
-                                || (first.end > next.start)     // 7:00 - 8:00 | 7:15 - 7:45
+                            if (first.end > next.start)     
                             {
                                 first.isConflicting = true
                                 next.isConflicting = true
