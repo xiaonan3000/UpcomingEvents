@@ -8,21 +8,21 @@
 
 import UIKit
 
-class EventItem: Codable{
+struct EventItem: Codable{
     var title: String
     var start: Date
     var end: Date
-    var isConflicting: Bool = false
-    
-    enum CodingKeys: String, CodingKey {
-        // include only those that you want to decode/encode
-        case title, start, end
-    }
+}
+
+struct ConflictRange{
+    var start: Date
+    var end: Date
 }
 
 class ViewController: UIViewController {
 
     var eventDataArray = [EventItem]()
+    var conflictsDict = [Date: ConflictRange]()
     
     let shortDateFormatter : DateFormatter = {
         let formatter = DateFormatter()
@@ -81,18 +81,24 @@ class ViewController: UIViewController {
     
     //Finding Overlapping time frames
     func checkConflictEvents(){
-        for key in sortedDateKeys{
-            if let eventList = eventDataDictionary[key]{
-                if eventList.count > 1 {
-                    for i in 0...eventList.count-2{
-                        let first = eventList[i]
-                        for j in i+1...eventList.count-1{
-                            let next  = eventList[j]
-                            //Events are already sorted by start time
-                            if (first.end > next.start)     
-                            {
-                                first.isConflicting = true
-                                next.isConflicting = true
+        for dateKey in sortedDateKeys{
+            if let eventList = eventDataDictionary[dateKey],  eventList.count > 1 {
+                for i in 0...eventList.count-2{
+                    let first = eventList[i]
+                    for j in i+1...eventList.count-1{
+                        let next  = eventList[j]
+                        //Events are already sorted by start time
+                        if (first.end > next.start)
+                        {
+                            if let range = conflictsDict[dateKey]{
+                                if range.start > next.start{
+                                    conflictsDict[dateKey]!.start = next.start
+                                }
+                                if range.end < first.end{
+                                    conflictsDict[dateKey]!.start = first.end
+                                }
+                            }else{
+                                conflictsDict[dateKey] = ConflictRange.init(start: next.start, end: first.end)
                             }
                         }
                     }
@@ -161,10 +167,10 @@ extension ViewController: UITableViewDataSource{
             cell.detailTextLabel?.text = "\(timeFormatter.string(from: startDate)) - \(timeFormatter.string(from: endDate))"
         
             //Conflicting event
-            if eventForCell.isConflicting  == true{
-                print("event for cell is conflicting =\(eventForCell.title)")
+            if let conflictInterval = conflictsDict[key]{
+                let isOverlapping = (eventForCell.start...eventForCell.end).overlaps(conflictInterval.start...conflictInterval.end)
+                cell.detailTextLabel?.textColor = isOverlapping ? UIColor.red  : UIColor.darkGray
             }
-            cell.detailTextLabel?.textColor = eventForCell.isConflicting ? UIColor.red  : UIColor.darkGray
         }
         return cell
     }
