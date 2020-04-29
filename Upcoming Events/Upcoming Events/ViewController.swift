@@ -12,16 +12,16 @@ struct EventItem: Codable, Hashable{
     var title: String
     var start: Date
     var end: Date
-}
-
-struct ConflictRange{
-    var start: Date
-    var end: Date
+    var createdDate = Date()
+    
+    enum CodingKeys: String, CodingKey {
+        case title, start, end
+    }
 }
 
 class ViewController: UIViewController {
 
-    var eventDataDictionary = [Date : [EventItem]]()
+    var groupedEventDict = [Date : [EventItem]]()
     var sortedDateKeys =  [Date]()
     var conflictingEventsSet : Set<EventItem>  = []
     
@@ -33,7 +33,7 @@ class ViewController: UIViewController {
     
     let longDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
-        formatter.dateFormat = "MMM dd, yyyy h:mm a"
+        formatter.dateFormat = "MMMM dd, yyyy h:mm a"
         return formatter
     }()
     
@@ -49,57 +49,68 @@ class ViewController: UIViewController {
     @IBOutlet weak var eventTableView: UITableView!
     
     override func viewDidLoad() {
-        super.viewDidLoad()        
-        self.loadData()
+        super.viewDidLoad()
+        self.loadDataForDisplay()
     }
 
-    func writeJsonDataToEvents() -> [EventItem]?{
-        if let path = Bundle.main.url(forResource: "mock", withExtension: "json"){
-            do {
-                let data = try Data(contentsOf: path)
-                let decoder = JSONDecoder()  //November 10, 2018 6:00 PM"
-                decoder.dateDecodingStrategy = .formatted(longDateFormatter)
-                //Write json data to EventItem
-                let events = try decoder.decode([EventItem].self, from: data)
-                return events
-                
-            } catch {
-                print("JSON decoding Error:\(error)")
-                return nil
-            }
-        }
-        return nil
-    }
-    
-    func loadData(){
-        if let events = self.writeJsonDataToEvents(){
-            self.eventTableView.isHidden = false
-            self.noEventLabel.isHidden = true
-            
-            let sortedEvents = events.sorted(by: {$0.start < $1.start })
-            //Get conflicting events
-            self.conflictingEventsSet = getConflictingEvents(sortedEvents: sortedEvents)
-            //Group events by Start Date
-            self.eventDataDictionary = sortedEvents.reduce(into: [Date: [EventItem]]()) { result, event in
-                // Sort events under the same date group by their start dates
-                let components = Calendar.current.dateComponents([.day, .year, .month], from: event.start)
-                let date = Calendar.current.date(from: components)
-                result[date!, default: []].append(event)
-            }
-            //Sort Keys by Date Componenet
-            sortedDateKeys = eventDataDictionary.keys.sorted(by: {$0 > $1})
-            self.eventTableView.reloadData()
-        }
-        else{
+    func loadDataForDisplay(){
+        let eventsData = parseDataToEvents("mock")
+        
+        if eventsData.count == 0{
             //No events
             self.eventTableView.isHidden = true
             self.noEventLabel.isHidden = false
+        }else{
+            self.eventTableView.isHidden = false
+            self.noEventLabel.isHidden = true
+            
+            let sortedEvents = eventsData.sorted(by: {$0.start < $1.start })
+            
+            self.conflictingEventsSet = getConflictingEventsSet(sortedEvents)
+            
+            //Group sorted Event by Date
+            self.groupedEventDict = groupEventsData(sortedEvents)
+            
+            //Sort Keys by Date Componenet
+            sortedDateKeys = groupedEventDict.keys.sorted(by: {$0 > $1})
+            self.eventTableView.reloadData()
         }
     }
     
+    func parseDataToEvents(_ fileName: String) -> [EventItem]{
+        guard let path = Bundle.main.url(forResource: fileName, withExtension: "json") else {
+                print("Can't find \(fileName).json file")
+                return []
+        }
+        do {
+            let data = try Data(contentsOf: path)
+            let decoder = JSONDecoder()  //November 10, 2018 6:00 PM"
+            decoder.dateDecodingStrategy = .formatted(longDateFormatter)
+            //Decode json data to EventItem
+            let events = try decoder.decode([EventItem].self, from: data)
+            return events
+            
+        } catch {
+            print("JSON decoding Error:\(error)")
+            return []
+        }
+    }
     
-     //Input events need to be sorted by start time
-    func getConflictingEvents(sortedEvents: [EventItem]) -> Set<EventItem>{
+    func groupEventsData(_ sortedEvents: [EventItem]) -> [Date: [EventItem]]{
+        //Group events by Start Date
+        let groupedDict = sortedEvents.reduce(into: [Date: [EventItem]]()) { result, event in
+            // Sort events under the same date group by their start dates
+            let components = Calendar.current.dateComponents([.day, .year, .month], from: event.start)
+            let date = Calendar.current.date(from: components)
+            result[date!, default: []].append(event)
+        }
+        return groupedDict
+    }
+    
+    
+     //Events need to be sorted by start time
+    //Return a set of event item
+    func getConflictingEventsSet(_ sortedEvents: [EventItem]) -> Set<EventItem>{
         var conflictEvents : Set<EventItem> = []
         var intervalTaken: DateInterval =  DateInterval(start:sortedEvents[0].start, end: sortedEvents[0].end)
         for i in 1...sortedEvents.count-1{
@@ -117,12 +128,11 @@ class ViewController: UIViewController {
                 intervalTaken = DateInterval(start: event.start, end: event.end)
             }
         }
-       
         return conflictEvents
     }
     
     @IBAction func reloadJsonData(_ sender: Any) {
-        self.loadData()
+        self.loadDataForDisplay()
     }
 
 }
@@ -155,7 +165,7 @@ extension ViewController: UITableViewDataSource{
    
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         let key = sortedDateKeys[section]
-        if let values = eventDataDictionary[key]{
+        if let values = groupedEventDict[key]{
             return values.count
         }
         return 0
@@ -168,7 +178,7 @@ extension ViewController: UITableViewDataSource{
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = UITableViewCell.init(style: .value1, reuseIdentifier: "EventCell")
         let key = sortedDateKeys[indexPath.section]
-        if let values = eventDataDictionary[key]{
+        if let values = groupedEventDict[key]{
             let eventForCell = values[indexPath.row]
             cell.textLabel?.text = eventForCell.title
             
