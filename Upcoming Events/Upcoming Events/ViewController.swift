@@ -12,9 +12,20 @@ struct EventItem: Codable, Hashable{
     var title: String
     var start: Date
     var end: Date
-    //Use a unique id to identify events with same title and start/end date
-    //var createdDate = Date()
-    var id: String = UUID().uuidString
+    //Use a unique id to identify events
+    let id: String = UUID().uuidString
+    
+    var startDateString: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM d, yyyy h:mm a"
+        return formatter.string(from: self.start)
+    }
+    
+    var endDateString: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM d, yyyy h:mm a"
+        return formatter.string(from: self.end)
+    }
     
     enum CodingKeys: String, CodingKey {
         case title, start, end
@@ -22,7 +33,10 @@ struct EventItem: Codable, Hashable{
 }
 
 class ViewController: UIViewController {
-
+    
+    @IBOutlet weak var noEventLabel: UILabel!
+    @IBOutlet weak var eventTableView: UITableView!
+    
     var groupedEventDict = [Date : [EventItem]]()
     var sortedDateKeys =  [Date]()
     var conflictingEventsSet : Set<EventItem>  = []
@@ -35,7 +49,7 @@ class ViewController: UIViewController {
     
     let longDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
-        formatter.dateFormat = "MMMM dd, yyyy h:mm a"
+        formatter.dateFormat = "MMMM d, yyyy h:mm a"
         return formatter
     }()
     
@@ -44,10 +58,7 @@ class ViewController: UIViewController {
         formatter.dateFormat = "h:mm a"
         return formatter
     }()
-    
-    @IBOutlet weak var noEventLabel: UILabel!
-    @IBOutlet weak var eventTableView: UITableView!
-    
+   
     override func viewDidLoad() {
         super.viewDidLoad()
         self.loadDataForDisplay("mock")
@@ -84,7 +95,7 @@ class ViewController: UIViewController {
                 
                 self.eventTableView.reloadData()
                 
-                //Scroll to the date section cloest to current
+                //Scroll to current and upcoming date sections
                 if let sectionIndex = sortedDateKeys.firstIndex(where: {$0.timeIntervalSinceNow > 0}) {
                     self.eventTableView.scrollToRow(at: IndexPath(row: 0, section: sectionIndex), at: .top, animated: false)
                 }
@@ -124,6 +135,10 @@ class ViewController: UIViewController {
     //Return a set of conflicting event items
     func getConflictingEventsSet(_ sortedEvents: [EventItem]) -> Set<EventItem>{
         var conflictEvents : Set<EventItem> = []
+        //If sortedEvent has 0 or only 1 event, return empty set
+        if sortedEvents.count <= 1{
+            return conflictEvents
+        }
         //Start with first event item's time interval
         var intervalTaken: DateInterval =  DateInterval(start:sortedEvents[0].start, end: sortedEvents[0].end)
         //Starting compare with next event

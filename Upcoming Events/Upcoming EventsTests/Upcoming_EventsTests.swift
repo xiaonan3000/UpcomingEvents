@@ -22,54 +22,107 @@ class Upcoming_EventsTests: XCTestCase {
     }
 
     func testLoadJsonDataToEventItems() {
-        let data = Data(recentDayData.utf8)
+        //MixAll data has 6 events and one is invalid
+        let data = Data(TestJSONData.mixAll.utf8)
         let events = self.eventUnitTest.parseJSON(data)
-        XCTAssertEqual(events.count, 4)
+        XCTAssertEqual(events.count, 5)
         
         let firstEvent = events.first
         XCTAssertNotNil(firstEvent)
-        XCTAssertEqual(firstEvent!.title, "TEST DATA 1")
+        XCTAssertEqual(firstEvent!.title, "Non-Conflict 1")
+        XCTAssertEqual(firstEvent!.startDateString, "April 7, 2020 9:00 PM")
+        XCTAssertEqual(firstEvent!.endDateString, "April 7, 2020 10:30 PM")
         
-        let formatter = eventUnitTest.longDateFormatter
-        XCTAssertEqual(formatter.string(from: firstEvent!.start), "April 10, 2020 6:00 PM")
-        XCTAssertEqual(formatter.string(from: firstEvent!.end), "April 10, 2020 7:00 PM")
+        let secondEvent = events[1]
+        XCTAssertEqual(secondEvent.title, "Conflict 24hrs")
+        XCTAssertEqual(secondEvent.startDateString, "May 21, 2020 12:00 PM")
+        XCTAssertEqual(secondEvent.endDateString, "May 22, 2020 12:00 PM")
+        
+        let thirdEvent = events[2]
+        XCTAssertEqual(thirdEvent.title, "Conflict 3")
+        XCTAssertEqual(thirdEvent.startDateString, "May 22, 2020 10:00 AM")
+        XCTAssertEqual(thirdEvent.endDateString, "May 22, 2020 12:00 PM")
+        
+        let fourthEvent = events[3]
+        XCTAssertEqual(fourthEvent.title, "Identical Event")
+        XCTAssertEqual(fourthEvent.startDateString, "June 6, 2020 5:00 PM")
+        XCTAssertEqual(fourthEvent.endDateString, "June 6, 2020 10:00 PM")
+        
+        let lastEvent = events[4]
+        XCTAssertEqual(lastEvent.title, "Identical Event")
+        XCTAssertEqual(lastEvent.startDateString, "June 6, 2020 10:00 PM")
+        XCTAssertEqual(secondEvent.endDateString, "June 6, 2020 10:00 PM")
     }
     
-    func testLoadInvalidData(){
-        let noData = Data("".utf8)
+    func testLoadEmptyData(){
+        let noData = Data(TestJSONData.EmptyData.utf8)
         let noEvents = self.eventUnitTest.parseJSON(noData)
         XCTAssertEqual(noEvents.count, 0)
-        
-        let data = Data(invalidItems.utf8) //Three event with only one valid
+    }
+    
+    func testLoadInvalidEvent(){
+        let data = Data(TestJSONData.invalidDateEvent.utf8)
         let events = self.eventUnitTest.parseJSON(data)
-        XCTAssertEqual(events.count, 1)
-        XCTAssertEqual(events.first!.title, "Valid Event")
+        XCTAssertEqual(events.count, 0)
     }
 
     func testGroupEventsByDate(){
-        let testEvents = makeTestEvents(repeatingItems)
+        let testEvents = makeTestEvents(TestJSONData.mixAll)
         let eventDict = self.eventUnitTest.groupEventsData(testEvents)
-        XCTAssertEqual(eventDict.count, 3)
+        XCTAssertEqual(eventDict.count, 4)
+        let lastEvent = testEvents.last
+        XCTAssertNotNil(lastEvent)
+        XCTAssertEqual(lastEvent!.title, "Identical Event")
+        XCTAssertEqual(lastEvent!.startDateString, "June 6, 2020 5:00 PM")
+        XCTAssertEqual(lastEvent!.endDateString, "June 6, 2020 10:00 PM")
     }
     
-    func testGroupRepeatingEvents(){
-        let testEvents = makeTestEvents(repeatingItems)
+    func testGroupIdenticalEvents(){
+        let testEvents = makeTestEvents(TestJSONData.identicalPair)
         let eventDict = self.eventUnitTest.groupEventsData(testEvents)
         
         let formatter = eventUnitTest.shortDateFormatter
-        let dateKey = formatter.date(from: "June 6, 2021")
+        let dateKey = formatter.date(from: "June 6, 2020")
         let events = eventDict[dateKey!]
         XCTAssertNotNil(events)
-        XCTAssertEqual(events!.count, 2) //Two Repeating Items
+        XCTAssertEqual(events!.count, 2) //Two identical Items
     }
     
-    func testCheckConflictingEvent() {
-        let testEvents = makeTestEvents(repeatingItems)
+    func testGroupEventsOfInvalidData(){
+        let testEvents = makeTestEvents(TestJSONData.invalidDateEvent)
+        let eventDict = self.eventUnitTest.groupEventsData(testEvents)
+        XCTAssertEqual(eventDict.count, 0)
+    }
+    
+    func testCheckConflictInNonConflictingData() {
+        let testEvents = makeTestEvents(TestJSONData.nonConflict)
         let conflictingSet = self.eventUnitTest.getConflictingEventsSet(testEvents)
-        XCTAssertEqual(conflictingSet.count, 2)
-      
-        XCTAssertTrue(conflictingSet.contains{$0.title == "Repeating Event"})
-        XCTAssertFalse(conflictingSet.contains{$0.title == "Non-conflict 5"})
+        XCTAssertEqual(conflictingSet.count, 0)
+        
+    }
+    
+    func testCheckConflictEventInvalidData(){
+        let testEvents = makeTestEvents(TestJSONData.EmptyData)
+        let conflictingSet = self.eventUnitTest.getConflictingEventsSet(testEvents)
+        XCTAssertEqual(conflictingSet.count, 0)
+    }
+    
+    func testCheckConflictEvents(){
+        let testEvents = makeTestEvents(TestJSONData.conflictingEvents)
+        let conflictingSet = self.eventUnitTest.getConflictingEventsSet(testEvents)
+        XCTAssertEqual(conflictingSet.count, 3)
+        XCTAssertTrue(conflictingSet.contains{$0.title == "Conflict 1"})
+        XCTAssertTrue(conflictingSet.contains{$0.title == "Conflict 2"})
+        XCTAssertTrue(conflictingSet.contains{$0.title == "Conflict 3 Two Days"})
+    }
+    
+    func testCheckConflictMixEvents(){
+        let testEvents = makeTestEvents(TestJSONData.mixAll)
+        let conflictingSet = self.eventUnitTest.getConflictingEventsSet(testEvents)
+        XCTAssertEqual(conflictingSet.count, 4)
+        XCTAssertTrue(conflictingSet.contains{$0.title == "Identical Event"})
+        XCTAssertTrue(conflictingSet.contains{$0.title == "Conflict 24hrs"})
+        XCTAssertFalse(conflictingSet.contains{$0.title == "Non-Conflict 1"})
     }
 }
 
@@ -86,71 +139,123 @@ extension Upcoming_EventsTests {
     }
 }
 
-private let recentDayData = """
-[
-   {
-      "title":"TEST DATA 1",
-      "start":"April 10, 2020 6:00 PM",
-      "end":"April 10, 2020 7:00 PM"
-   },
-   {
-      "title":"TEST DATA 2",
-      "start":"May 8, 2020 12:56 PM",
-      "end":"May 8, 2020 1:30 PM"
-   },
-   {
-      "title":"24hrs Event",
-      "start":"November 7, 2020 12:00 PM",
-      "end":"November 8, 2020 12:00 PM"
-   },
-   {
-      "title":"Full Day Event",
-      "start":"November 8, 2020 12:00 PM",
-      "end":"November 9, 2020 12:30 AM"
-   }
-]
-"""
-private let repeatingItems = """
-[
-   {
-      "title":"Conflict Event 1",
-      "start":"May 10, 2019 6:00 PM",
-      "end":"May 10, 2019 7:00 PM"
-   },
-   {
-      "title":"Conflict Event 2",
-      "start":"May 8, 2019 12:56 PM",
-      "end":"May 8, 2019 1:30 PM"
-   },
-   {
-      "title":"Repeating Event",
-      "start":"June 6, 2021 5:00 PM",
-      "end":"June 6, 2021 10:00 PM"
-   },
-   {
-      "title":"Repeating Event",
-      "start":"June 6, 2021 5:00 PM",
-      "end":"June 6, 2021 10:00 PM"
-   }
-]
-"""
+fileprivate struct TestJSONData{
+    //Empty JSON Data
+    static let EmptyData = """
+    [
+        {
+        }
+    ]
+    """
+    //Four Non Conflict events
+    static let nonConflict = """
+    [
+       {
+          "title":"Non Conflict 1",
+          "start":"April 10, 2020 6:00 PM",
+          "end":"April 10, 2020 7:00 PM"
+       },
+       {
+          "title":"Non Conflict 2",
+          "start":"May 8, 2020 12:56 PM",
+          "end":"May 8, 2020 1:30 PM"
+       },
+       {
+          "title":"Non Conflict 3",
+          "start":"November 7, 2020 12:00 PM",
+          "end":"November 8, 2020 12:00 PM"
+       },
+       {
+          "title":"Non Conflict 4",
+          "start":"November 8, 2020 12:00 PM",
+          "end":"November 9, 2020 12:30 AM"
+       }
+    ]
+    """
+    //Two identical Event
+    static let identicalPair = """
+    [
+       {
+          "title":"Identical Event",
+          "start":"June 6, 2020 5:00 PM",
+          "end":"June 6, 2020 10:00 PM"
+       },
+       {
+          "title":"Identical Event",
+          "start":"June 6, 2020 5:00 PM",
+          "end":"June 6, 2020 10:00 PM"
+       }
+    ]
+    """
+    //Two invalid event
+    static let invalidDateEvent = """
+    [
+      {
+          "title":"Bad End Date",
+          "start":"November 7, 2020 12:00 PM",
+          "end":"November 7, 2018 2:30 PM"
+      },
+      {
+          "title":"Same Start & End Date",
+          "start":"November 2, 2020 12:00 PM",
+          "end":"November 2, 2020 12:00 PM"
+      }
+    ]
+    """
+    //Three events conflicting
+    static let conflictingEvents = """
+       [
+         {
+             "title":"Conflict 1",
+             "start":"May 1, 2020 12:00 PM",
+             "end":"May 1, 2020 11:00 PM"
+         },
+         {
+             "title":"Conflict 2",
+             "start":"May 1, 2020 10:00 AM",
+             "end":"May 1, 2020 1:00 PM"
+         },
+         {
+            "title":"Conflict 3 Two Days",
+            "start":"May 1, 2020 10:00 AM",
+            "end":"May 2, 2020 10:00 PM"
+         }
+       ]
+       """
+    //One conflict pair, one non- conflict, one invalid, one pair identical
+    static let mixAll = """
+    [
+      {
+          "title":"Non-Conflict 1",
+          "start":"April 7, 2020 9:00 PM",
+          "end":"April 7, 2020 10:30 PM"
+       },
+       {
+           "title":"Conflict 24hrs",
+           "start":"May 21, 2020 12:00 PM",
+           "end":"May 22, 2020 12:00 PM"
+        },
+        {
+           "title":"Conflict 3",
+           "start":"May 22, 2020 10:00 AM",
+           "end":"May 22, 2020 12:00 PM"
+        },
+        {
+           "title":"Invalid Date Event",
+           "start":"November 7, 2021 12:00 PM",
+           "end":"November 7, 2018 2:30 PM"
+        },
+        {
+            "title":"Identical Event",
+            "start":"June 6, 2020 5:00 PM",
+            "end":"June 6, 2020 10:00 PM"
+        },
+        {
+            "title":"Identical Event",
+            "start":"June 6, 2020 5:00 PM",
+            "end":"June 6, 2020 10:00 PM"
+        }
+    ]
+    """
+}
 
-private let invalidItems = """
-[
-  {
-      "title":"Bad End Date",
-      "start":"November 7, 2021 12:00 PM",
-      "end":"November 7, 2018 2:30 PM"
-  },
-  {
-      "title":"Valid Event",
-      "start":"November 1, 2018 12:00 PM",
-      "end":"November 1, 2018 2:30 PM"
-  },
-  {
-      "title":"Same Start & End Date",
-      "start":"November 2, 2020 12:00 PM",
-      "end":"November 2, 2020 12:00 PM"
-  }
-]
-"""
