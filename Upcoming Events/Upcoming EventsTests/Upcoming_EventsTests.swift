@@ -12,6 +12,14 @@ import XCTest
 class Upcoming_EventsTests: XCTestCase {
     var eventUnitTest: ViewController!
     
+    private let containRepeatingItems = """
+[{"title": "Conflict Event 1", "start": "November 10, 2018 6:00 PM", "end": "November 10, 2018 7:00 PM"}, {"title": "Conflict Event 2", "start": "November 8, 2018 12:56 PM", "end": "November 8, 2018 1:30 PM"}, {"title": "Repeating Event", "start": "November 6, 2018 5:00 PM", "end": "November 6, 2018 10:00 PM"}, {"title": "Repeating Event", "start": "November 6, 2018 5:00 PM", "end": "November 6, 2018 10:00 PM"}, {"title": "Same Interval 5", "start": "November 7, 2018 12:00 PM", "end": "November 7, 2018 2:30 PM"}, {"title": "Same Interval 6", "start": "November 7, 2018 12:00 PM", "end": "November 7, 2018 2:30 PM"},{"title": "Non-conflict 7", "start": "November 1, 2018 12:00 PM", "end": "November 1, 2018 2:30 PM"},{"title": "Non conflict 8", "start": "November 2, 2018 12:00 PM", "end": "November 3, 2018 1:00 AM"}]
+"""
+     private let containInvalidItems = """
+    [{"title": "Bad End Date", "start": "November 7, 2021 12:00 PM", "end": "November 7, 2018 2:30 PM"},{"title": "DATA no conflict", "start": "November 1, 2018 12:00 PM", "end": "November 1, 2018 2:30 PM"},{"title": "Smae Start & End Date", "start": "November 2, 2020 12:00 PM", "end": "November 2, 2020 12:00 PM"}]
+    """
+      
+    
     override func setUp() {
         eventUnitTest = UIStoryboard(name: "Main", bundle: nil)
         .instantiateInitialViewController() as? ViewController
@@ -22,62 +30,62 @@ class Upcoming_EventsTests: XCTestCase {
     }
 
     func testLoadJsonDataToEventItems() {
-        let fileName = "testEvents"
-        let events = self.eventUnitTest.parseJSON(fileName)
-        XCTAssertEqual(events.count, 6)
+        let data = Data(containRepeatingItems.utf8)
+    
+        let events = self.eventUnitTest.parseJSON(data)
+        XCTAssertEqual(events.count, 8)
         
         let firstEvent = events.first
         XCTAssertNotNil(firstEvent)
-        XCTAssertEqual(firstEvent!.title, "TEST DATA 1")
+        XCTAssertEqual(firstEvent!.title, "Event 1 conflicting Event 2")
         
         let formatter = eventUnitTest.longDateFormatter
         XCTAssertEqual(formatter.string(from: firstEvent!.start), "November 10, 2018 6:00 PM")
         XCTAssertEqual(formatter.string(from: firstEvent!.end), "November 10, 2018 7:00 PM")
+        
+        let emptyData = Data("".utf8)
+        let emptyEvent = self.eventUnitTest.parseJSON(emptyData)
+        XCTAssertEqual(emptyEvent.count, 0)
     }
 
     func testGroupEventsByDate(){
-        var testEvents = makeTestEvents()
-        testEvents.sort(by: {$0.start < $1.start})
-        let events = self.eventUnitTest.groupEventsData(testEvents)
-        XCTAssertEqual(events.count, 3)
+        let testEvents = makeTestEvents(containRepeatingItems)
+        let eventDict = self.eventUnitTest.groupEventsData(testEvents)
+        XCTAssertEqual(eventDict.count, 6)
+        
+        let dateKey = longDateForSting("November 6, 2018 5:00 PM") ?? Date()
+        let events = eventDict[dateKey]
+        XCTAssertNotNil(events)
+        XCTAssertEqual(events!.count, 2) //Identical items
     }
     
     func testCheckConflictingEvent() {
-        var testEvents = makeTestEvents()
-        testEvents.sort(by: {$0.start < $1.start})
+        let testEvents = makeTestEvents(containRepeatingItems)
         let conflictingSet = self.eventUnitTest.getConflictingEventsSet(testEvents)
         XCTAssertEqual(conflictingSet.count, 4)
+      
+        let repeatingEvents = conflictingSet.filter{$0.title == "Repeating Event"}
+        XCTAssertEqual(repeatingEvents.count, 2)
+        
+        let nonConflictEvents = conflictingSet.filter{$0.title == "Non-conflict 7"}
+       XCTAssertEqual(nonConflictEvents.count, 0)
     }
 }
 
 extension Upcoming_EventsTests {
-    func makeTestEvents() -> [EventItem] {
-        var testEvents = [EventItem]()
-        
-        let currentDate = Date()
-        let nextDay = currentDate.addingTimeInterval(3600*24)
-        let thirdDay = currentDate.addingTimeInterval(3600*48)
-        
-        //First two events conflicting each other
-        let event1 = EventItem(title: "Event 1 conflicting Event 2 ", start: currentDate, end: currentDate.addingTimeInterval(3600*12))
-        testEvents.append(event1)
-        let event2 = EventItem(title: "Event 2", start: currentDate, end: currentDate.addingTimeInterval(3600*2))
-        testEvents.append(event2)
-        
-        //Second pair of events has identical title, start and end date
-        let startDate = currentDate.addingTimeInterval(3600*12)
-        let endDate = startDate.addingTimeInterval(3600*1)
-        let event3 = EventItem(title: "Test Identical Title and Date Conflicting Item", start: startDate, end: endDate)
-        testEvents.append(event3)
-        let event4 = EventItem(title: "Test Identical Title and DateConflicting Item", start: startDate, end: endDate)
-        testEvents.append(event4)
-        
-        //Last two events is not conflicting
-        let event5 = EventItem(title: "Non Conflicting Event 5", start: nextDay, end: nextDay.addingTimeInterval(3600*1))
-        testEvents.append(event5)
-        let event6 = EventItem(title: "Non Conflicting Event 6", start: thirdDay.addingTimeInterval(3600*12), end: thirdDay.addingTimeInterval(3600*14))
-        testEvents.append(event6)
-        
-        return testEvents
+   
+    func makeTestEvents(_ jsonString: String) -> [EventItem] {
+        let data = Data(jsonString.utf8)
+        let events = self.eventUnitTest.parseJSON(data)
+        //Validate events data
+        var validEvents = events.filter({$0.start <=  $0.end})
+        //Sort events by start date
+        validEvents.sort(by: { $0.start < $1.start})
+        return validEvents
+    }
+    
+    func longDateForSting(_ input: String)->Date?{
+        let formatter = eventUnitTest.longDateFormatter
+        return formatter.date(from: input)
     }
 }

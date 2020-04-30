@@ -14,7 +14,7 @@ struct EventItem: Codable, Hashable{
     var end: Date
     //Use a unique id to identify events with same title and start/end date
     //var createdDate = Date()
-    var id: UUID = UUID()
+    var id: String = UUID().uuidString
     
     enum CodingKeys: String, CodingKey {
         case title, start, end
@@ -53,56 +53,58 @@ class ViewController: UIViewController {
         self.loadDataForDisplay("mock")
     }
 
-    func loadDataForDisplay(_ fileName: String?){
-        guard let jsonFileName = fileName else{
-            //No events
-            self.eventTableView.isHidden = true
-            self.noEventLabel.isHidden = false
+    func loadDataForDisplay(_ fileName: String){
+        guard let path = Bundle.main.url(forResource: fileName, withExtension: "json") else {
+            print("Can't find \(fileName).json file")
             return
         }
-        var eventsData = parseJSON(jsonFileName)
         
-        if eventsData.count == 0{
-            //No events
-            self.eventTableView.isHidden = true
-            self.noEventLabel.isHidden = false
-        }else{
-            self.eventTableView.isHidden = false
-            self.noEventLabel.isHidden = true
-            eventsData.sort(by: { $0.start < $1.start})
-            
-            self.conflictingEventsSet = getConflictingEventsSet(eventsData)
-            
-            //Group sorted Event by Date
-            self.groupedEventDict = groupEventsData(eventsData)
-            
-            //Sort Keys by Date Componenet, cloest to current date
-            let today = Date()
-            sortedDateKeys = groupedEventDict.keys.sorted(by: {
-                let t1 = abs($0.timeIntervalSince(today))
-                let t2 = abs($1.timeIntervalSince(today))
-                return t1 <= t2
-            })
-            
-            self.eventTableView.reloadData()
+        do {
+            let data = try Data(contentsOf: path)
+            let eventsData = parseJSON(data)
+            if eventsData.count == 0{
+                //No events
+                self.eventTableView.isHidden = true
+                self.noEventLabel.isHidden = false
+            }else{
+                self.eventTableView.isHidden = false
+                self.noEventLabel.isHidden = true
+                
+                //Validate events data
+                var validEvents = eventsData.filter({$0.start <=  $0.end})
+                //Sort events by start date
+                validEvents.sort(by: { $0.start < $1.start})
+                
+                //get a set of conflicting Event items
+                self.conflictingEventsSet = getConflictingEventsSet(validEvents)
+                
+                //Group sorted Event by Date
+                self.groupedEventDict = groupEventsData(eventsData)
+                
+                //Sort Keys by Date Componenet, cloest to current date
+                let today = Date()
+                sortedDateKeys = groupedEventDict.keys.sorted(by: {
+                    let t1 = abs($0.timeIntervalSince(today))
+                    let t2 = abs($1.timeIntervalSince(today))
+                    return t1 <= t2
+                })
+                
+                self.eventTableView.reloadData()
+            }
+        }catch {
+            print("Data content error:\(error)")
         }
     }
     
-    func parseJSON(_ fileName: String) -> [EventItem]{
-        guard let path = Bundle.main.url(forResource: fileName, withExtension: "json") else {
-                print("Can't find \(fileName).json file")
-                return []
-        }
+    func parseJSON(_ data: Data) -> [EventItem]{
         do {
-            let data = try Data(contentsOf: path)
             let decoder = JSONDecoder()  //November 10, 2018 6:00 PM"
             decoder.dateDecodingStrategy = .formatted(longDateFormatter)
             //Decode json data to EventItem
             let events = try decoder.decode([EventItem].self, from: data)
             return events
-            
         } catch {
-            print("JSON decoding Error:\(error)")
+            print("JSON Decoding Error:\(error)")
             return []
         }
     }
@@ -120,22 +122,26 @@ class ViewController: UIViewController {
     
     
     //Events need to be sorted by start time before check for conflicts
-    //Return a set of event items
+    //Return a set of conflicting event items
     func getConflictingEventsSet(_ sortedEvents: [EventItem]) -> Set<EventItem>{
         var conflictEvents : Set<EventItem> = []
+        //Start with first event item's time interval
         var intervalTaken: DateInterval =  DateInterval(start:sortedEvents[0].start, end: sortedEvents[0].end)
+        //Starting compare with next event
         for i in 1...sortedEvents.count-1{
+            
             let event = sortedEvents[i]
-           
             if (intervalTaken.end > event.start)
             {
-                //Overlapping
+                //Found conflicting - get overlapping interval
                 intervalTaken = DateInterval(start: intervalTaken.start, end: max(event.end, intervalTaken.end))
                 let previousEvent = sortedEvents[i-1]
+                
+                //Insert conflicting events into Set (no duplicate)
                 conflictEvents.insert(previousEvent)
                 conflictEvents.insert(event)
             }else{
-                //start a new interval
+                //Not overlapping, start a new interval
                 intervalTaken = DateInterval(start: event.start, end: event.end)
             }
         }
@@ -150,10 +156,12 @@ class ViewController: UIViewController {
         })
         alertController.addAction(UIAlertAction(title: "OK", style: .default)
         { action -> Void in
-          // Put your code here
+            // Put your code here
             let tf = alertController.textFields![0]
             let fileName = tf.text ?? ""
-            self.loadDataForDisplay(fileName)
+            if fileName.isEmpty == false{
+                self.loadDataForDisplay(fileName)
+            }
         })
         self.present(alertController, animated: false, completion: nil)
     }
