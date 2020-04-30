@@ -75,11 +75,11 @@ class ViewController: UIViewController {
                 //Sort events by start date
                 validEvents.sort(by: { $0.start < $1.start})
                 
-                //get a set of conflicting Event items
-                self.conflictingEventsSet = getConflictingEventsSet(validEvents)
-                
                 //Group sorted Event by Date
-                self.groupedEventDict = groupEventsData(eventsData)
+                self.groupedEventDict = groupEventsData(validEvents)
+                
+                //Get a set of conflicting Event items
+                self.conflictingEventsSet = getConflictingEventsSet(validEvents)
                 
                 //Sort Keys by Date Componenet, cloest to current date
                 let today = Date()

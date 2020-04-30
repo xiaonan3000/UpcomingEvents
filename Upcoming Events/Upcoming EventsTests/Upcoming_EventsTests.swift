@@ -37,13 +37,13 @@ class Upcoming_EventsTests: XCTestCase {
         
         let firstEvent = events.first
         XCTAssertNotNil(firstEvent)
-        XCTAssertEqual(firstEvent!.title, "Event 1 conflicting Event 2")
+        XCTAssertEqual(firstEvent!.title, "Conflict Event 1")
         
         let formatter = eventUnitTest.longDateFormatter
         XCTAssertEqual(formatter.string(from: firstEvent!.start), "November 10, 2018 6:00 PM")
         XCTAssertEqual(formatter.string(from: firstEvent!.end), "November 10, 2018 7:00 PM")
         
-        let emptyData = Data("".utf8)
+        let emptyData = Data("Bad Data Content".utf8)
         let emptyEvent = self.eventUnitTest.parseJSON(emptyData)
         XCTAssertEqual(emptyEvent.count, 0)
     }
