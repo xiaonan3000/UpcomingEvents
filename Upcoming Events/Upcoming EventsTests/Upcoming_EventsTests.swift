@@ -50,8 +50,8 @@ class Upcoming_EventsTests: XCTestCase {
         
         let lastEvent = events[4]
         XCTAssertEqual(lastEvent.title, "Identical Event")
-        XCTAssertEqual(lastEvent.startDateString, "June 6, 2020 10:00 PM")
-        XCTAssertEqual(secondEvent.endDateString, "June 6, 2020 10:00 PM")
+        XCTAssertEqual(lastEvent.startDateString, "June 6, 2020 5:00 PM")
+        XCTAssertEqual(lastEvent.endDateString, "June 6, 2020 10:00 PM")
     }
     
     func testLoadEmptyData(){
