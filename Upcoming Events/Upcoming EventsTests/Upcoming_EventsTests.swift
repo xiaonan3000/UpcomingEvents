@@ -23,10 +23,8 @@ class Upcoming_EventsTests: XCTestCase {
 
     func testLoadJsonDataToEventItems() {
         let fileName = "testEvents"
-        
         let events = self.eventUnitTest.parseJSON(fileName)
-       
-        XCTAssertEqual(events.count, 5)
+        XCTAssertEqual(events.count, 6)
         
         let firstEvent = events.first
         XCTAssertNotNil(firstEvent)
@@ -35,7 +33,6 @@ class Upcoming_EventsTests: XCTestCase {
         let formatter = eventUnitTest.longDateFormatter
         XCTAssertEqual(formatter.string(from: firstEvent!.start), "November 10, 2018 6:00 PM")
         XCTAssertEqual(formatter.string(from: firstEvent!.end), "November 10, 2018 7:00 PM")
-
     }
 
     func testGroupEventsByDate(){
