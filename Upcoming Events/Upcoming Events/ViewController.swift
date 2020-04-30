@@ -58,10 +58,13 @@ class ViewController: UIViewController {
         formatter.dateFormat = "h:mm a"
         return formatter
     }()
+    
+    //Define input file name
+    let inputFileName = "mock"
    
     override func viewDidLoad() {
         super.viewDidLoad()
-        self.loadDataForDisplay("mock")
+        self.loadDataForDisplay(inputFileName)
     }
 
     func loadDataForDisplay(_ fileName: String){
