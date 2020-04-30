@@ -12,7 +12,9 @@ struct EventItem: Codable, Hashable{
     var title: String
     var start: Date
     var end: Date
-    var createdDate = Date()
+    //Use a unique id to identify events with same title and start/end date
+    //var createdDate = Date()
+    var id: UUID = UUID()
     
     enum CodingKeys: String, CodingKey {
         case title, start, end
@@ -42,19 +44,23 @@ class ViewController: UIViewController {
         formatter.dateFormat = "h:mm a"
         return formatter
     }()
-   
- 
     
     @IBOutlet weak var noEventLabel: UILabel!
     @IBOutlet weak var eventTableView: UITableView!
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        self.loadDataForDisplay()
+        self.loadDataForDisplay("mock")
     }
 
-    func loadDataForDisplay(){
-        let eventsData = parseDataToEvents("mock")
+    func loadDataForDisplay(_ fileName: String?){
+        guard let jsonFileName = fileName else{
+            //No events
+            self.eventTableView.isHidden = true
+            self.noEventLabel.isHidden = false
+            return
+        }
+        var eventsData = parseJSON(jsonFileName)
         
         if eventsData.count == 0{
             //No events
@@ -63,21 +69,26 @@ class ViewController: UIViewController {
         }else{
             self.eventTableView.isHidden = false
             self.noEventLabel.isHidden = true
+            eventsData.sort(by: { $0.start < $1.start})
             
-            let sortedEvents = eventsData.sorted(by: {$0.start < $1.start })
-            
-            self.conflictingEventsSet = getConflictingEventsSet(sortedEvents)
+            self.conflictingEventsSet = getConflictingEventsSet(eventsData)
             
             //Group sorted Event by Date
-            self.groupedEventDict = groupEventsData(sortedEvents)
+            self.groupedEventDict = groupEventsData(eventsData)
             
-            //Sort Keys by Date Componenet
-            sortedDateKeys = groupedEventDict.keys.sorted(by: {$0 > $1})
+            //Sort Keys by Date Componenet, cloest to current date
+            let today = Date()
+            sortedDateKeys = groupedEventDict.keys.sorted(by: {
+                let t1 = abs($0.timeIntervalSince(today))
+                let t2 = abs($1.timeIntervalSince(today))
+                return t1 <= t2
+            })
+            
             self.eventTableView.reloadData()
         }
     }
     
-    func parseDataToEvents(_ fileName: String) -> [EventItem]{
+    func parseJSON(_ fileName: String) -> [EventItem]{
         guard let path = Bundle.main.url(forResource: fileName, withExtension: "json") else {
                 print("Can't find \(fileName).json file")
                 return []
@@ -108,8 +119,8 @@ class ViewController: UIViewController {
     }
     
     
-     //Events need to be sorted by start time
-    //Return a set of event item
+    //Events need to be sorted by start time before check for conflicts
+    //Return a set of event items
     func getConflictingEventsSet(_ sortedEvents: [EventItem]) -> Set<EventItem>{
         var conflictEvents : Set<EventItem> = []
         var intervalTaken: DateInterval =  DateInterval(start:sortedEvents[0].start, end: sortedEvents[0].end)
@@ -131,11 +142,23 @@ class ViewController: UIViewController {
         return conflictEvents
     }
     
+    //Fot test purpose - switch json data file
     @IBAction func reloadJsonData(_ sender: Any) {
-        self.loadDataForDisplay()
+        let alertController = UIAlertController(title: "Load another JSON File?", message: nil, preferredStyle:.alert)
+        alertController.addTextField(configurationHandler: { (textField) in
+            textField.placeholder = "Enter file name"
+        })
+        alertController.addAction(UIAlertAction(title: "OK", style: .default)
+        { action -> Void in
+          // Put your code here
+            let tf = alertController.textFields![0]
+            let fileName = tf.text ?? ""
+            self.loadDataForDisplay(fileName)
+        })
+        self.present(alertController, animated: false, completion: nil)
     }
-
 }
+
 extension ViewController: UITableViewDelegate{
     
     func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {

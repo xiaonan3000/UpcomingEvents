@@ -24,7 +24,7 @@ class Upcoming_EventsTests: XCTestCase {
     func testLoadJsonDataToEventItems() {
         let fileName = "testEvents"
         
-        let events = self.eventUnitTest.parseDataToEvents(fileName)
+        let events = self.eventUnitTest.parseJSON(fileName)
        
         XCTAssertEqual(events.count, 5)
         
