@@ -61,7 +61,7 @@ class ViewController: UIViewController {
         
         do {
             let data = try Data(contentsOf: path)
-            let eventsData = parseJSON(data)
+            var eventsData = parseJSON(data)
             if eventsData.count == 0{
                 //No events
                 self.eventTableView.isHidden = true
@@ -70,26 +70,24 @@ class ViewController: UIViewController {
                 self.eventTableView.isHidden = false
                 self.noEventLabel.isHidden = true
                 
-                //Validate events data
-                var validEvents = eventsData.filter({$0.start <=  $0.end})
                 //Sort events by start date
-                validEvents.sort(by: { $0.start < $1.start})
+                eventsData.sort(by: { $0.start < $1.start})
                 
                 //Group sorted Event by Date
-                self.groupedEventDict = groupEventsData(validEvents)
+                self.groupedEventDict = groupEventsData(eventsData)
                 
                 //Get a set of conflicting Event items
-                self.conflictingEventsSet = getConflictingEventsSet(validEvents)
+                self.conflictingEventsSet = getConflictingEventsSet(eventsData)
                 
                 //Sort Keys by Date Componenet, cloest to current date
-                let today = Date()
-                sortedDateKeys = groupedEventDict.keys.sorted(by: {
-                    let t1 = abs($0.timeIntervalSince(today))
-                    let t2 = abs($1.timeIntervalSince(today))
-                    return t1 <= t2
-                })
+                sortedDateKeys = groupedEventDict.keys.sorted(by: {$0 < $1})
                 
                 self.eventTableView.reloadData()
+                
+                //Scroll to the date section cloest to current
+                if let sectionIndex = sortedDateKeys.firstIndex(where: {$0.timeIntervalSinceNow > 0}) {
+                    self.eventTableView.scrollToRow(at: IndexPath(row: 0, section: sectionIndex), at: .top, animated: false)
+                }
             }
         }catch {
             print("Data content error:\(error)")
@@ -98,11 +96,12 @@ class ViewController: UIViewController {
     
     func parseJSON(_ data: Data) -> [EventItem]{
         do {
-            let decoder = JSONDecoder()  //November 10, 2018 6:00 PM"
-            decoder.dateDecodingStrategy = .formatted(longDateFormatter)
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .formatted(longDateFormatter) //November 10, 2018 6:00 PM"
             //Decode json data to EventItem
             let events = try decoder.decode([EventItem].self, from: data)
-            return events
+            let validEvents = events.filter({$0.start <  $0.end})
+            return validEvents
         } catch {
             print("JSON Decoding Error:\(error)")
             return []
@@ -147,24 +146,7 @@ class ViewController: UIViewController {
         }
         return conflictEvents
     }
-    
-    //Fot test purpose - switch json data file
-    @IBAction func reloadJsonData(_ sender: Any) {
-        let alertController = UIAlertController(title: "Load another JSON File?", message: nil, preferredStyle:.alert)
-        alertController.addTextField(configurationHandler: { (textField) in
-            textField.placeholder = "Enter file name"
-        })
-        alertController.addAction(UIAlertAction(title: "OK", style: .default)
-        { action -> Void in
-            // Put your code here
-            let tf = alertController.textFields![0]
-            let fileName = tf.text ?? ""
-            if fileName.isEmpty == false{
-                self.loadDataForDisplay(fileName)
-            }
-        })
-        self.present(alertController, animated: false, completion: nil)
-    }
+
 }
 
 extension ViewController: UITableViewDelegate{
