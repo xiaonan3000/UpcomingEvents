@@ -75,50 +75,104 @@ class ViewController: UIViewController {
         
         do {
             let data = try Data(contentsOf: path)
-            var eventsData = parseJSON(data)
-            if eventsData.count == 0{
-                //No events
-                self.eventTableView.isHidden = true
-                self.noEventLabel.isHidden = false
-            }else{
-                self.eventTableView.isHidden = false
-                self.noEventLabel.isHidden = true
+            let _ = parseJSON(data) {validEvents in
                 
-                //Sort events by start date
-                eventsData.sort(by: { $0.start < $1.start})
-                
-                //Group sorted Event by Date
-                self.groupedEventDict = groupEventsData(eventsData)
-                
-                //Get a set of conflicting Event items
-                self.conflictingEventsSet = getConflictingEventsSet(eventsData)
-                
-                //Sort Keys by Date Componenet, cloest to current date
-                sortedDateKeys = groupedEventDict.keys.sorted(by: {$0 < $1})
-                
-                self.eventTableView.reloadData()
-                
-                //Scroll to current and upcoming date sections
-                if let sectionIndex = sortedDateKeys.firstIndex(where: {$0.timeIntervalSinceNow > 0}) {
-                    self.eventTableView.scrollToRow(at: IndexPath(row: 0, section: sectionIndex), at: .top, animated: false)
+                DispatchQueue.main.async {
+                    self.loadUI(validEvents)
                 }
             }
+//            self.loadUI(&eventsData)
         }catch {
             print("Data content error:\(error)")
         }
     }
     
-    func parseJSON(_ data: Data) -> [EventItem]{
-        do {
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .formatted(longDateFormatter) //November 10, 2018 6:00 PM"
-            //Decode json data to EventItem
-            let events = try decoder.decode([EventItem].self, from: data)
-            let validEvents = events.filter({$0.start <  $0.end})
-            return validEvents
-        } catch {
-            print("JSON Decoding Error:\(error)")
-            return []
+    func loadUI(_ eventsData: [EventItem]){
+        if eventsData.count == 0{
+            //No events
+            self.eventTableView.isHidden = true
+            self.noEventLabel.isHidden = false
+        }else{
+            self.eventTableView.isHidden = false
+            self.noEventLabel.isHidden = true
+            
+            self.eventTableView.reloadData()
+            
+            //Scroll to current and upcoming date sections
+            if let sectionIndex = self.sortedDateKeys.firstIndex(where: {$0.timeIntervalSinceNow > 0}) {
+                self.eventTableView.scrollToRow(at: IndexPath(row: 0, section: sectionIndex), at: .top, animated: false)
+            }
+        }
+    }
+    func parseJSON(_ data: Data, completion: @escaping ([EventItem]) ->Void){
+           var validEvents = [EventItem]()
+           DispatchQueue.global(qos: .userInitiated).async {[weak self] in
+               guard let self = self else{return}
+               let decoder = JSONDecoder()
+               let formatter = DateFormatter()
+               formatter.dateFormat = "MMMM d, yyyy h:mm a"
+               
+               decoder.dateDecodingStrategy = .formatted(formatter) //November 10, 2018 6:00 PM"
+               //Decode json data to EventItem
+               if let allEvents = try? decoder.decode([EventItem].self, from: data){
+                   validEvents = allEvents.filter({$0.start <  $0.end})
+                   //Sort events by start date
+                   validEvents.sort(by: { $0.start < $1.start})
+                   //Group sorted Event by Date
+                   self.groupedEventDict = self.groupEventsData(validEvents)
+                   
+                   //Get a set of conflicting Event items
+                   self.conflictingEventsSet = self.getConflictingEventsSet(validEvents)
+                   
+                   //Sort Keys by Date Componenet, cloest to current date
+                   self.sortedDateKeys = self.groupedEventDict.keys.sorted(by: {$0 < $1})
+                  
+               }
+               else{
+                   self.showError()
+               }
+               completion(validEvents)
+           }
+       }
+//    func parseJSON(_ data: Data) -> [EventItem]{
+//        var validEvents = [EventItem]()
+//        DispatchQueue.global(qos: .userInitiated).async {[weak self] in
+//            guard let self = self else{return}
+//            let decoder = JSONDecoder()
+//            let formatter = DateFormatter()
+//            formatter.dateFormat = "MMMM d, yyyy h:mm a"
+//
+//            decoder.dateDecodingStrategy = .formatted(formatter) //November 10, 2018 6:00 PM"
+//            //Decode json data to EventItem
+//            if let allEvents = try? decoder.decode([EventItem].self, from: data){
+//                validEvents = allEvents.filter({$0.start <  $0.end})
+//                //Sort events by start date
+//                validEvents.sort(by: { $0.start < $1.start})
+//                //Group sorted Event by Date
+//                self.groupedEventDict = self.groupEventsData(validEvents)
+//
+//                //Get a set of conflicting Event items
+//                self.conflictingEventsSet = self.getConflictingEventsSet(validEvents)
+//
+//                //Sort Keys by Date Componenet, cloest to current date
+//                self.sortedDateKeys = self.groupedEventDict.keys.sorted(by: {$0 < $1})
+//                DispatchQueue.main.async {
+//                    self.loadUI(&validEvents)
+//                }
+//            }
+//            else{
+//                self.showError()
+//            }
+//        }
+//
+//        return validEvents
+//    }
+    
+    func showError(){
+        DispatchQueue.main.async {[weak self] in
+            let ac = UIAlertController(title: "Loading error", message: "There was a problem loading the feed; please check your connection and try again.", preferredStyle: .alert)
+            ac.addAction(UIAlertAction(title: "OK", style: .default))
+            self?.present(ac, animated: true)
         }
     }
     
@@ -207,7 +261,7 @@ extension ViewController: UITableViewDataSource{
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = UITableViewCell.init(style: .value1, reuseIdentifier: "EventCell")
+        let cell = UITableViewCell.init(style: .subtitle, reuseIdentifier: "EventCell")
         let key = sortedDateKeys[indexPath.section]
         if let values = groupedEventDict[key]{
             let eventForCell = values[indexPath.row]
